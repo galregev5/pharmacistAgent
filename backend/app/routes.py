@@ -78,3 +78,10 @@ def user_transaction():
         return jsonify({"error": str(err)}), 400
     except sqlite3.Error as err:
         return jsonify({"error": f"database error: {err}"}), 500
+
+
+@main.route("/chat", methods=["POST"])
+def chat():
+    data = request.get_json() or {}
+    user_message = data.get("message", "")
+    return jsonify({"response": f"Echo from backend: {user_message}"})
