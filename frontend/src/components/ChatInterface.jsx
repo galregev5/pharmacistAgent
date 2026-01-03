@@ -6,19 +6,39 @@ import { Button } from './ui/button'
 import { Card } from './ui/card'
 import { Input } from './ui/input'
 import { ScrollArea } from './ui/scroll-area'
+import { sendMessage } from '../services/api'
 
-const mockMessages = [
+const initialMessages = [
   { sender: 'agent', text: 'Hello! I am your Pharmacy Agent. How can I assist you today?' },
-  { sender: 'user', text: 'Can you check stock for Aspirin 100mg?' },
-  { sender: 'agent', text: 'Aspirin 100mg is in stock. Do you want me to reserve 1 pack?' },
 ]
 
 function ChatInterface() {
   const [draft, setDraft] = useState('')
+  const [messages, setMessages] = useState(initialMessages)
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
+    const text = draft.trim()
+    if (!text) return
+
+    const userMessage = { sender: 'user', text }
+    setMessages((prev) => [...prev, userMessage])
     setDraft('')
+    setIsLoading(true)
+
+    try {
+      const data = await sendMessage(text, [...messages, userMessage])
+      const agentReply = data?.reply || data?.message || data?.response || 'Okay.'
+      setMessages((prev) => [...prev, { sender: 'agent', text: agentReply }])
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        { sender: 'agent', text: 'Sorry, I could not reach the server. Please try again.' },
+      ])
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -30,7 +50,7 @@ function ChatInterface() {
 
       <ScrollArea className="flex-1 px-6 py-6">
         <div className="flex flex-col gap-4">
-          {mockMessages.map((msg, idx) => {
+          {messages.map((msg, idx) => {
             const isAgent = msg.sender === 'agent'
             return (
               <div key={`${msg.sender}-${idx}`} className={`flex ${isAgent ? 'justify-start' : 'justify-end'}`}>
@@ -53,6 +73,21 @@ function ChatInterface() {
               </div>
             )
           })}
+
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="flex max-w-[70%] items-start gap-3">
+                <Avatar className="h-9 w-9 bg-slate-200 text-slate-700">
+                  <AvatarFallback>
+                    <Stethoscope className="h-4 w-4" />
+                  </AvatarFallback>
+                </Avatar>
+                <div className="rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-800 shadow-sm">
+                  Thinking...
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </ScrollArea>
 
@@ -65,8 +100,11 @@ function ChatInterface() {
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Ask about medications..."
                 aria-label="Chat message"
+                disabled={isLoading}
               />
-              <Button type="submit">Send</Button>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? 'Sending...' : 'Send'}
+              </Button>
             </form>
           </Card>
         </div>
