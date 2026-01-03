@@ -24,19 +24,46 @@ function ChatInterface() {
     if (!text) return
 
     const userMessage = { sender: 'user', text }
-    setMessages((prev) => [...prev, userMessage])
+    const history = [...messages, userMessage]
+
+    setMessages((prev) => [...prev, userMessage, { sender: 'agent', text: '' }])
     setDraft('')
     setIsLoading(true)
 
     try {
-      const data = await sendMessage(text, [...messages, userMessage])
-      const agentReply = data?.reply || data?.message || data?.response || 'Okay.'
-      setMessages((prev) => [...prev, { sender: 'agent', text: agentReply }])
+      const finalText = await sendMessage(text, history, (token) => {
+        setMessages((prev) => {
+          const next = [...prev]
+          const lastIndex = next.length - 1
+          if (next[lastIndex] && next[lastIndex].sender === 'agent') {
+            next[lastIndex] = { ...next[lastIndex], text: (next[lastIndex].text || '') + token }
+          }
+          return next
+        })
+      })
+
+      if (!finalText) {
+        setMessages((prev) => {
+          const next = [...prev]
+          const lastIndex = next.length - 1
+          if (next[lastIndex] && next[lastIndex].sender === 'agent') {
+            next[lastIndex] = { ...next[lastIndex], text: 'Okay.' }
+          }
+          return next
+        })
+      }
     } catch (error) {
-      setMessages((prev) => [
-        ...prev,
-        { sender: 'agent', text: 'Sorry, I could not reach the server. Please try again.' },
-      ])
+      setMessages((prev) => {
+        const next = [...prev]
+        const lastIndex = next.length - 1
+        const fallback = 'Sorry, I could not reach the server. Please try again.'
+        if (next[lastIndex] && next[lastIndex].sender === 'agent') {
+          next[lastIndex] = { ...next[lastIndex], text: fallback }
+        } else {
+          next.push({ sender: 'agent', text: fallback })
+        }
+        return next
+      })
     } finally {
       setIsLoading(false)
     }
