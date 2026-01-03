@@ -1,12 +1,23 @@
 """API routes blueprint for the Pharmacy Agent."""
 
+import json
+import os
 import sqlite3
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request
+from openai import OpenAI
 
 from app.services import pharmacy_service, prescription_service, user_service
 
 
 main = Blueprint("main", __name__)
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL")
+client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+SYSTEM_PROMPT = (
+    "You are a helpful pharmacy assistant. Provide factual information only. "
+    "Do not give medical advice. Redirect advice requests to a healthcare professional."
+)
 
 
 @main.route("/api/health", methods=["GET"])
@@ -83,5 +94,31 @@ def user_transaction():
 @main.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json() or {}
-    user_message = data.get("message", "")
-    return jsonify({"response": f"Echo from backend: {user_message}"})
+    user_message = (data.get("message", "") or "").strip()
+
+    if not user_message:
+        return jsonify({"error": "message is required"}), 400
+    if not OPENAI_API_KEY or not OPENAI_MODEL or client is None:
+        return jsonify({"error": "OpenAI API is not configured"}), 500
+
+    def stream():
+        try:
+            response = client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
+                stream=True,
+            )
+
+            for chunk in response:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield f"data: {json.dumps({'token': content})}\n\n"
+
+            yield "data: [DONE]\n\n"
+        except Exception as exc:  # noqa: BLE001
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+
+    return Response(stream(), mimetype="text/event-stream")
