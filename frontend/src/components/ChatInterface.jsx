@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Stethoscope } from 'lucide-react'
 
 import { Avatar, AvatarFallback } from './ui/avatar'
@@ -16,6 +16,7 @@ function ChatInterface() {
   const [draft, setDraft] = useState('')
   const [messages, setMessages] = useState(initialMessages)
   const [isLoading, setIsLoading] = useState(false)
+  const messagesEndRef = useRef(null)
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -40,6 +41,10 @@ function ChatInterface() {
       setIsLoading(false)
     }
   }
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, isLoading])
 
   return (
     <div className="flex h-full flex-1 flex-col bg-white">
@@ -88,6 +93,8 @@ function ChatInterface() {
               </div>
             </div>
           )}
+
+          <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 
