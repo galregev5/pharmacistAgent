@@ -2,7 +2,9 @@
 
 import os
 import sqlite3
-from datetime import datetime
+import time
+from contextlib import closing
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -13,15 +15,25 @@ def initialize_database() -> None:
 	"""Create a fresh database with schema and seed data."""
 
 	if DB_PATH.exists():
-		DB_PATH.unlink()
+		last_error = None
+		for _ in range(3):
+			try:
+				DB_PATH.unlink()
+				last_error = None
+				break
+			except PermissionError as exc:
+				last_error = exc
+				time.sleep(0.1)
+		if last_error:
+			raise last_error
 
 	DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-	with sqlite3.connect(DB_PATH) as conn:
+	with closing(sqlite3.connect(DB_PATH)) as conn:
 		conn.execute("PRAGMA foreign_keys = ON;")
-
-		_create_tables(conn)
-		_seed_data(conn)
+		with conn:
+			_create_tables(conn)
+			_seed_data(conn)
 
 
 def _create_tables(conn: sqlite3.Connection) -> None:
@@ -110,7 +122,7 @@ def _create_tables(conn: sqlite3.Connection) -> None:
 
 def _seed_data(conn: sqlite3.Connection) -> None:
 	cursor = conn.cursor()
-	now = datetime.utcnow().isoformat()
+	now = datetime.now(timezone.utc).isoformat()
 
 	users = [
 		("User_Gal", "User Gal", "customer", 0.0, now),
